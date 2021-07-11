@@ -23,6 +23,10 @@ arising from,  out of  or in connection  with  the software  or  the  use  or  o
 Software. »
 -----------------------------------------------------------------------------------------------------
 ***/
+#ifdef _MSC_VER
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #ifdef _WIN32
 #define OS_WIN 1
 #endif
@@ -42,6 +46,10 @@ Software. »
 #include<stdio.h>
 #include<errno.h>
 #include<math.h>
+
+/* Macros to remove warnings */
+#define double_to_int(x) ((int)((double)(x)))
+#define to_unsigned(x) ((unsigned int)(x))
 
 #define MAXCHANNEL 3
 
@@ -95,8 +103,8 @@ unsigned char SubChunk2Size[4];
 void push_wav(char *outputfilename, short int *data, int n) {
 	struct s_wav_header wav_header={0};
 	unsigned int datasize,riffsize;
-	unsigned char chunksize[4];
-	char RIFF[5];
+	/* unused: unsigned char chunksize[4]; */
+	/* unused: char RIFF[5]; */
 	FILE *f;
 #ifdef OS_WIN
 	int sr;
@@ -245,7 +253,7 @@ double *load_wav(char *filename, int *n, double *acqui) {
 	}
 
         nbsample=controlsize/nbchannel/(bitspersample/8);
-        if (controlsize+sizeof(struct s_wav_header)>filesize) {
+        if (controlsize+sizeof(struct s_wav_header)>to_unsigned(filesize)) {
                 fprintf(stderr,"WAV import - cannot read %d byte%s of audio whereas the file is %d bytes big!\n",controlsize,controlsize>1?"s":"",filesize);
 		free(data);
                 return NULL;
@@ -307,7 +315,7 @@ double calcule_fourier_precision(double *data, int n, int peak, double cutlow, d
         int i,j,imax;
 	int lp,mp,ws,bornemin;
 
-	bornemin=(double)peak*cutlow/peakHz*16384/n;
+	bornemin= double_to_int(peak*cutlow/peakHz*16384/n);
 	if (bornemin<1) bornemin=1;
 
 	// [lp:mp] let us zoom on previous (small) fourier buffer
@@ -417,7 +425,7 @@ double * compute_AY(int ws, int replay, int clean, double cuthigh, double cutlow
 	double *retfour;
 	double *minisignal;
 	double freq,target;
-	int i,j,k;
+	int i,j;
 	double vtic,tic,mtic;
 
 	freq=replay*ws; // echantillons/seconde
@@ -496,10 +504,10 @@ int getvolume(double level) {
 void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, double acqui, double replay, double preamp, int info, double workingfreq, int nbchannel, double treshold, int dmalist, char *wavout_filename) {
 	double *fourier,*oldfourier;
 	double *newdata,subcoef;
-	double vmax,resolution,picfreq;
+	double /* unused:vmax,*/ resolution,picfreq;
 	int nbwin,i,j,k,imax,ws,clean;
 	struct s_ay_period *ay=NULL;
-	short int *wavout;
+	short int *wavout=NULL;
 	int wavout_n=0;
 
 	// Amstrad registers
@@ -528,7 +536,7 @@ void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, dou
 	}
 	if (cutlow<workingfreq/4095.0*1.3) cutlow=workingfreq/4095.0*1.3;
 
-	ws=acqui/replay; // 312 samples pour 15000Hz avec replay a 50Hz
+	ws=double_to_int(acqui/replay); // 312 samples pour 15000Hz avec replay a 50Hz
 	if (ws<200) {
 		fprintf(stderr,"window size is small, results may be very innacurate\n");
 	}
@@ -554,7 +562,7 @@ void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, dou
 
 	// calculer la valeur du nettoyage a faire sur la transformee pour eviter les basses frequences mal filtrees
 	resolution=acqui/(double)ws;
-	clean=1+floor(replay/resolution+0.5);
+	clean=1+double_to_int(floor(replay/resolution+0.5));
 
 	// precalc des fouriers de l'AY sur la fenetre utilisee
 	ay=(struct s_ay_period *)malloc(4096*sizeof(struct s_ay_period));
@@ -588,7 +596,7 @@ void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, dou
 	}
 
 	if (wavout_filename) {
-		wavout=(short int *)malloc(nbwin*(sizeof(short int)*workingfreq*2.0/replay+1));
+		wavout=(short int *)malloc(nbwin*(sizeof(short int)*double_to_int(workingfreq*2.0/replay+1)));
 		wavout_n=0;
 	}
 
@@ -612,8 +620,8 @@ void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, dou
 			imax=getpeak(fourier,ws);
 			// energie suffisante pour s'en soucier?
 			if (fourier[imax]>treshold) {
-				int volume;
-				int plow,phigh;
+				/* unused: int volume; */
+				/* unused: int plow,phigh; */
 
 				if (info) fprintf(stderr,"segment %3d pic en %.0lfHz (resolution=%.1lf) norme=%.1lf\n",i,imax*resolution,resolution,fourier[imax]);
 
@@ -627,10 +635,10 @@ void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, dou
 				if (info) fprintf(stderr," => recherche de precision donne %.1lfHz\n",picfreq);
 
 				// appliquer la soustraction AY sur la transformee de Fourier pour la suite
-				imax=workingfreq/picfreq; // periode AY
+				imax=double_to_int(workingfreq/picfreq); // periode AY
 				if (imax>4095) imax=4095;
 
-				if (!ay[imax].fourier) ay[imax].fourier=compute_AY(ws,replay,clean,cuthigh,cutlow,imax,workingfreq);
+				if (!ay[imax].fourier) ay[imax].fourier=compute_AY(ws, double_to_int(replay),clean,cuthigh,cutlow,imax,workingfreq);
 
 				subcoef=fourier[k]/ay[imax].fourier[k];
 				for (j=0;j<=ws/2;j++) fourier[j]-=ay[imax].fourier[j]*subcoef;
@@ -686,7 +694,7 @@ void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, dou
 			int tic[MAXCHANNEL]={0};
 			int vchan[MAXCHANNEL];
 
-			maxp=workingfreq*2.0/replay;
+			maxp= double_to_int(workingfreq*2.0/replay);
 			for (channel=0;channel<nbchannel;channel++) {
 				vchan[channel]=ref[AYvolume[channel]]/2;
 				tic[channel]=AYperiod[channel];
@@ -735,7 +743,7 @@ void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, dou
 				psgvolume+=1;
 			}
 
-			nbpausedma=312.0/replay*50.0-nbchanges;
+			nbpausedma= double_to_int(312.0/replay*50.0-nbchanges);
 			// no control on this value
 			printf("defb %d,#30+%d\n",nbpausedma&0xFF,(nbpausedma>>8)&0xF); // pause 50Hz
 
@@ -758,13 +766,13 @@ void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, dou
 	}
 
 	if (wavout_filename) {
-		double acc,pos,step,aron,frac,integer_part;
+		double acc,pos,step, /* unused: aron, */ frac,integer_part;
 		int iidx,oidx=0;
 		step=2.0*workingfreq/44100.0;
 
 		for (pos=0;pos<wavout_n-step;pos+=step) {
 			frac=modf(pos,&integer_part);
-			iidx=integer_part;
+			iidx= double_to_int(integer_part);
 			acc=(1.0-frac)*wavout[iidx];
 			while (integer_part+1.0<pos+step) {
 				acc+=wavout[+iidx];
@@ -773,7 +781,7 @@ void do_sample(double *data,int n, double pw, double cutlow, double cuthigh, dou
 			frac=modf(pos,&integer_part);
 			acc+=frac*wavout[++iidx];
 			acc/=step;
-			wavout[oidx++]=acc;
+			wavout[oidx++]= double_to_int(acc);
 		}
 		push_wav(wavout_filename,wavout,oidx);
 		free(wavout);
